@@ -43,7 +43,7 @@ function ehLista($dados)
     return true;
 }
 
-$arquivoPadrao = __DIR__ . '/dados.json';
+$arquivoPadrao = __DIR__ . '/bases/base_atividade.json';
 $diretorioBases = __DIR__ . '/bases';
 
 if (!is_dir($diretorioBases) && !mkdir($diretorioBases, 0775, true) && !is_dir($diretorioBases)) {
@@ -81,9 +81,9 @@ function listarBases($diretorioBases)
 {
     $bases = [
         [
-            'id' => 'dados.json',
-            'nome' => 'Base padrão',
-            'arquivo' => 'dados.json',
+            'id' => 'base_atividade.json',
+            'nome' => 'Base de jogadores',
+            'arquivo' => 'base_atividade.json',
             'padrao' => true
         ]
     ];
@@ -93,6 +93,9 @@ function listarBases($diretorioBases)
 
     foreach ($arquivos as $arquivo) {
         $nome = basename($arquivo);
+        if ($nome === 'base_atividade.json') {
+            continue;
+        }
         $bases[] = [
             'id' => $nome,
             'nome' => pathinfo($nome, PATHINFO_FILENAME),
@@ -106,7 +109,7 @@ function listarBases($diretorioBases)
 
 function caminhoBaseSelecionada($base, $arquivoPadrao, $diretorioBases)
 {
-    if ($base === null || $base === '' || $base === 'dados.json') {
+    if ($base === null || $base === '' || $base === 'base_atividade.json') {
         return $arquivoPadrao;
     }
 
@@ -184,13 +187,13 @@ function validarUsuario($dados, $parcial = false)
         }
     }
 
-    if (!$parcial || array_key_exists('email', $dados)) {
-        $email = trim((string) ($dados['email'] ?? ''));
+    if (!$parcial || array_key_exists('clube', $dados)) {
+        $clube = trim((string) ($dados['clube'] ?? ''));
 
-        if ($email === '') {
-            $erros['email'] = 'O e-mail é obrigatório.';
-        } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-            $erros['email'] = 'Informe um e-mail válido.';
+        if ($clube === '') {
+            $erros['clube'] = 'O clube é obrigatório.';
+        } elseif (textoTamanho($clube) > 100) {
+            $erros['clube'] = 'O clube deve ter no máximo 100 caracteres.';
         }
     }
 
@@ -217,7 +220,7 @@ function validarBaseImportada($dados)
 
     $erros = [];
     $ids = [];
-    $emails = [];
+    $clubes = [];
 
     foreach ($dados as $indice => $usuario) {
         if (!is_array($usuario)) {
@@ -241,14 +244,6 @@ function validarBaseImportada($dados)
             $erros["registro_$indice.$campo"] = $mensagem;
         }
 
-        if (isset($usuario['email']) && filter_var($usuario['email'], FILTER_VALIDATE_EMAIL)) {
-            $email = strtolower(trim($usuario['email']));
-            if (isset($emails[$email])) {
-                $erros["registro_$indice.email"] = 'O e-mail está duplicado na base.';
-            }
-            $emails[$email] = true;
-        }
-
         if (count($erros) >= 20) {
             $erros['base'] = 'A validação foi interrompida após encontrar muitos erros.';
             break;
@@ -264,18 +259,18 @@ function normalizarBaseImportada($dados)
         return [
             'id' => (int) $usuario['id'],
             'nome' => trim($usuario['nome']),
-            'email' => trim($usuario['email']),
+            'clube' => trim($usuario['clube']),
             'idade' => (int) $usuario['idade']
         ];
     }, $dados);
 }
 
-function emailEmUso($usuarios, $email, $ignorarId = null)
+function clubeEmUso($usuarios, $clube, $ignorarId = null)
 {
     foreach ($usuarios as $usuario) {
         if (
-            isset($usuario['email'], $usuario['id']) &&
-            strtolower($usuario['email']) === strtolower($email) &&
+            isset($usuario['clube'], $usuario['id']) &&
+            strtolower($usuario['clube']) === strtolower($clube) &&
             ($ignorarId === null || (int) $usuario['id'] !== $ignorarId)
         ) {
             return true;
@@ -406,7 +401,7 @@ if ($action === 'delete-base') {
 
     $base = $_GET['base'] ?? '';
 
-    if ($base === '' || $base === 'dados.json') {
+    if ($base === '' || $base === 'base_atividade.json') {
         erro('A base padrão não pode ser removida.', 400);
     }
 
@@ -429,7 +424,7 @@ if ($action === 'delete-base') {
     responder(['message' => 'Base removida com sucesso.']);
 }
 
-$baseSelecionada = $_GET['base'] ?? 'dados.json';
+$baseSelecionada = $_GET['base'] ?? 'base_atividade.json';
 $arquivo = caminhoBaseSelecionada($baseSelecionada, $arquivoPadrao, $diretorioBases);
 $usuarios = carregarUsuarios($arquivo);
 $id = isset($_GET['id']) ? (int) $_GET['id'] : null;
@@ -445,7 +440,7 @@ if ($metodo === 'GET') {
             }
         }
 
-        erro('Usuário não encontrado', 404);
+        erro('Jogador não encontrado', 404);
     }
 
     $resultado = $usuarios;
@@ -458,11 +453,11 @@ if ($metodo === 'GET') {
         });
     }
 
-    if (isset($_GET['email']) && trim($_GET['email']) !== '') {
-        $email = textoMinusculo(trim($_GET['email']));
+    if (isset($_GET['clube']) && trim($_GET['clube']) !== '') {
+        $clube = textoMinusculo(trim($_GET['clube']));
 
-        $resultado = array_filter($resultado, function ($usuario) use ($email) {
-            return isset($usuario['email']) && str_contains(textoMinusculo($usuario['email']), $email);
+        $resultado = array_filter($resultado, function ($usuario) use ($clube) {
+            return isset($usuario['clube']) && str_contains(textoMinusculo($usuario['clube']), $clube);
         });
     }
 
@@ -478,12 +473,12 @@ if ($metodo === 'GET') {
         });
     }
 
-    $camposOrdenacao = ['id', 'nome', 'email', 'idade'];
+    $camposOrdenacao = ['id', 'nome', 'clube', 'idade'];
     $sort = $_GET['sort'] ?? 'id';
     $order = strtolower($_GET['order'] ?? 'asc');
 
     if (!in_array($sort, $camposOrdenacao, true)) {
-        erroValidacao(['sort' => 'Campo de ordenação inválido. Use id, nome, email ou idade.']);
+        erroValidacao(['sort' => 'Campo de ordenação inválido. Use id, nome, clube ou idade.']);
     }
 
     if (!in_array($order, ['asc', 'desc'], true)) {
@@ -508,7 +503,7 @@ if ($metodo === 'GET') {
         'total' => count($resultado),
         'filtros' => [
             'nome' => $_GET['nome'] ?? null,
-            'email' => $_GET['email'] ?? null,
+            'clube' => $_GET['clube'] ?? null,
             'idade' => isset($_GET['idade']) && $_GET['idade'] !== '' ? (int) $_GET['idade'] : null
         ],
         'ordenacao' => [
@@ -527,12 +522,6 @@ if ($metodo === 'POST') {
         erroValidacao($erros);
     }
 
-    $email = trim($dados['email']);
-
-    if (emailEmUso($usuarios, $email)) {
-        erroValidacao(['email' => 'Este e-mail já está cadastrado.']);
-    }
-
     $ids = array_map(function ($usuario) {
         return (int) ($usuario['id'] ?? 0);
     }, $usuarios);
@@ -541,7 +530,7 @@ if ($metodo === 'POST') {
     $novoUsuario = [
         'id' => $novoId,
         'nome' => trim($dados['nome']),
-        'email' => $email,
+        'clube' => trim($dados['clube']),
         'idade' => (int) $dados['idade']
     ];
 
@@ -566,18 +555,13 @@ if ($metodo === 'PUT') {
         erroValidacao($erros);
     }
 
-    $email = trim($dados['email']);
-
-    if (emailEmUso($usuarios, $email, $id)) {
-        erroValidacao(['email' => 'Este e-mail já está cadastrado.']);
-    }
 
     foreach ($usuarios as $indice => $usuario) {
         if ((int) $usuario['id'] === $id) {
             $usuarios[$indice] = [
                 'id' => $id,
                 'nome' => trim($dados['nome']),
-                'email' => $email,
+                'clube' => trim($dados['clube']),
                 'idade' => (int) $dados['idade']
             ];
 
@@ -590,7 +574,7 @@ if ($metodo === 'PUT') {
         }
     }
 
-    erro('Usuário não encontrado', 404);
+    erro('Jogador não encontrado', 404);
 }
 
 if ($metodo === 'PATCH') {
@@ -610,21 +594,14 @@ if ($metodo === 'PATCH') {
         erroValidacao($erros);
     }
 
-    if (
-        array_key_exists('email', $dados) &&
-        emailEmUso($usuarios, trim($dados['email']), $id)
-    ) {
-        erroValidacao(['email' => 'Este e-mail já está cadastrado.']);
-    }
-
     foreach ($usuarios as $indice => $usuario) {
         if ((int) $usuario['id'] === $id) {
             if (array_key_exists('nome', $dados)) {
                 $usuarios[$indice]['nome'] = trim($dados['nome']);
             }
 
-            if (array_key_exists('email', $dados)) {
-                $usuarios[$indice]['email'] = trim($dados['email']);
+            if (array_key_exists('clube', $dados)) {
+                $usuarios[$indice]['clube'] = trim($dados['clube']);
             }
 
             if (array_key_exists('idade', $dados)) {
@@ -640,7 +617,7 @@ if ($metodo === 'PATCH') {
         }
     }
 
-    erro('Usuário não encontrado', 404);
+    erro('Jogador não encontrado', 404);
 }
 
 if ($metodo === 'DELETE') {
@@ -656,13 +633,13 @@ if ($metodo === 'DELETE') {
 
             responder([
                 'base' => $baseSelecionada,
-                'message' => 'Usuário excluído',
+                'message' => 'Jogador excluído',
                 'dados' => $usuarioExcluido
             ]);
         }
     }
 
-    erro('Usuário não encontrado', 404);
+    erro('Jogador não encontrado', 404);
 }
 
 erro('Método não permitido', 405);
